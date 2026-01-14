@@ -16,7 +16,7 @@ public class UserController {
     @Autowired
     private UserService service;
 
-    Autowired
+    @Autowired
     AuthenticationManager authenticationManager;
 
     @PostMapping("register")

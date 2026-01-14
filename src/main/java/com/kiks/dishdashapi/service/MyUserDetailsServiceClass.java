@@ -1,6 +1,7 @@
 package com.kiks.dishdashapi.service;
 
 import com.kiks.dishdashapi.model.User;
+import com.kiks.dishdashapi.model.UserPrincipal;
 import com.kiks.dishdashapi.repo.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,7 +20,7 @@ public class MyUserDetailsServiceClass implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        Optional<User> user = repo.findByEmail(username);
+       User user = repo.findByEmail(username);
 
         if (user==null) {
             System.out.println("User 404");

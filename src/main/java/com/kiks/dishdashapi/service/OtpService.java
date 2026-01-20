@@ -15,47 +15,86 @@ public class OtpService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
+    // OTP expires fast
     private static final Duration OTP_TTL = Duration.ofMinutes(1);
+
+    // Reset token lasts a bit longer
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(10);
+
+    // Security controls
+    private static final int MAX_ATTEMPTS = 5;
+    private static final Duration REQUEST_COOLDOWN = Duration.ofSeconds(60);
 
     private final Map<String, OtpData> otpStore = new ConcurrentHashMap<>();
     private final Map<String, ResetTokenData> resetTokenStore = new ConcurrentHashMap<>();
+    private final Map<String, CooldownData> cooldownStore = new ConcurrentHashMap<>();
 
-    /* ================= OTP ================= */
+    /* ================= OTP REQUEST ================= */
 
+    /**
+     * Generates and stores OTP if cooldown passed.
+     * @return otp (for now) or null if still cooling down
+     */
     public String generateAndStoreOtp(String key) {
+        Instant now = Instant.now();
+
+        // Cooldown check
+        CooldownData cd = cooldownStore.get(key);
+        if (cd != null && now.isBefore(cd.nextAllowedAt())) {
+            return null; // still cooling down
+        }
+
         String otp = generate6DigitOtp();
-        Instant expiresAt = Instant.now().plus(OTP_TTL);
-        otpStore.put(key, new OtpData(otp, expiresAt));
+        Instant expiresAt = now.plus(OTP_TTL);
+
+        otpStore.put(key, new OtpData(otp, expiresAt, MAX_ATTEMPTS));
+
+        // Start cooldown window
+        cooldownStore.put(key, new CooldownData(now.plus(REQUEST_COOLDOWN)));
+
         return otp;
     }
 
+    public Instant getNextAllowedRequestTime(String key) {
+        CooldownData cd = cooldownStore.get(key);
+        return (cd == null) ? Instant.EPOCH : cd.nextAllowedAt();
+    }
+
+    /* ================= OTP VERIFY ================= */
+
     /**
-     * Verifies OTP and returns a reset UUID if valid.
-     * Returns null if invalid or expired.
+     * Verifies OTP; if valid, returns a reset UUID.
+     * - Wrong attempts decrement; after MAX_ATTEMPTS failures -> OTP invalidated.
+     * - Expired OTP removed.
+     * Returns null if invalid/expired/too many attempts.
      */
     public String verifyOtpAndIssueResetToken(String key, String providedOtp) {
-        OtpData data = otpStore.get(key);
-        if (data == null) return null;
+        Instant now = Instant.now();
 
-        if (Instant.now().isAfter(data.expiresAt())) {
-            otpStore.remove(key);
-            return null;
-        }
+        final Holder<String> issued = new Holder<>(null);
 
-        if (!constantTimeEquals(data.otp(), providedOtp)) {
-            return null;
-        }
+        otpStore.compute(key, (k, data) -> {
+            if (data == null) return null;
 
-        // OTP is valid → destroy it
-        otpStore.remove(key);
+            // Expired -> delete
+            if (now.isAfter(data.expiresAt())) return null;
 
-        // Issue reset token
-        String resetToken = UUID.randomUUID().toString();
-        Instant expiresAt = Instant.now().plus(RESET_TOKEN_TTL);
-        resetTokenStore.put(resetToken, new ResetTokenData(key, expiresAt));
+            // Wrong OTP -> decrement attempts, possibly delete
+            if (!constantTimeEquals(data.otp(), providedOtp)) {
+                int left = data.attemptsLeft() - 1;
+                if (left <= 0) return null; // invalidate OTP
+                return new OtpData(data.otp(), data.expiresAt(), left);
+            }
 
-        return resetToken;
+            // Correct OTP -> delete OTP and issue reset token
+            String resetToken = UUID.randomUUID().toString();
+            resetTokenStore.put(resetToken, new ResetTokenData(key, now.plus(RESET_TOKEN_TTL)));
+            issued.value = resetToken;
+
+            return null; // remove OTP (one-time use)
+        });
+
+        return issued.value;
     }
 
     /* ================= RESET TOKEN ================= */
@@ -71,8 +110,7 @@ public class OtpService {
 
         if (!data.key().equals(key)) return false;
 
-        // one-time use
-        resetTokenStore.remove(resetToken);
+        resetTokenStore.remove(resetToken); // one-time use
         return true;
     }
 
@@ -97,16 +135,22 @@ public class OtpService {
     public void cleanupExpired() {
         Instant now = Instant.now();
 
-        otpStore.entrySet().removeIf(e ->
-                now.isAfter(e.getValue().expiresAt()));
-
-        resetTokenStore.entrySet().removeIf(e ->
-                now.isAfter(e.getValue().expiresAt()));
+        otpStore.entrySet().removeIf(e -> now.isAfter(e.getValue().expiresAt()));
+        resetTokenStore.entrySet().removeIf(e -> now.isAfter(e.getValue().expiresAt()));
+        cooldownStore.entrySet().removeIf(e -> now.isAfter(e.getValue().nextAllowedAt()));
     }
 
     /* ================= Records ================= */
 
-    public record OtpData(String otp, Instant expiresAt) {}
+    public record OtpData(String otp, Instant expiresAt, int attemptsLeft) {}
 
     public record ResetTokenData(String key, Instant expiresAt) {}
+
+    public record CooldownData(Instant nextAllowedAt) {}
+
+    // Tiny holder so we can “return” a value from inside compute()
+    private static final class Holder<T> {
+        T value;
+        Holder(T value) { this.value = value; }
+    }
 }

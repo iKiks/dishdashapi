@@ -58,23 +58,32 @@ public class UserController {
 
     @PostMapping("/request-otp")
     public ResponseEntity<?> requestOtp(@RequestBody OtpRequest req) {
-        String email = req.email();
+        String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
 
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body("Email is required");
         }
 
+        // Security: don’t reveal existence
         if (!service.existByEmail(email)) {
-            // Security best practice: don't reveal if email exists.
-            // But if you want to reveal, swap this to 404.
             return ResponseEntity.ok("If the email exists, an OTP has been sent.");
         }
 
-        String key = "otp:email:" + email.toLowerCase();
+        String key = "otp:email:" + email;
+
         String otp = otpService.generateAndStoreOtp(key);
 
-        // TODO: send email here (MailService)
-        // mailService.sendOtp(email, otp);
+        // Cooldown hit
+        if (otp == null) {
+            var next = otpService.getNextAllowedRequestTime(key);
+            long secondsLeft = Math.max(0, java.time.Duration.between(java.time.Instant.now(), next).getSeconds());
+
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header("Retry-After", String.valueOf(secondsLeft))
+                    .body("Too many requests. Try again in " + secondsLeft + "s");
+        }
+
+        // TODO: send via email service; printing for dev only
         System.out.println("otp: " + otp);
 
         return ResponseEntity.ok("OTP sent");
@@ -84,14 +93,21 @@ public class UserController {
 
     @PostMapping("/verify-otp")
     public ResponseEntity<?> verifyOtp(@RequestBody OtpVerifyRequest req) {
+        String email = (req.email() == null) ? null : req.email().trim().toLowerCase();
+        String otp = (req.otp() == null) ? null : req.otp().trim();
 
-        String key = "otp:email:" + req.email().toLowerCase();
-        String resetToken =
-                otpService.verifyOtpAndIssueResetToken(key, req.otp());
+        if (email == null || email.isBlank() || otp == null || otp.isBlank()) {
+            return ResponseEntity.badRequest().body("Email and OTP are required");
+        }
 
+        String key = "otp:email:" + email;
+
+        String resetToken = otpService.verifyOtpAndIssueResetToken(key, otp);
+
+        // null means: invalid / expired / too many attempts (OTP invalidated)
         if (resetToken == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body("Invalid or expired OTP");
+                    .body("Invalid/expired OTP (or too many attempts)");
         }
 
         return ResponseEntity.ok(Map.of("resetToken", resetToken));

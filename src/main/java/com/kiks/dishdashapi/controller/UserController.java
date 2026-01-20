@@ -44,7 +44,7 @@ public class UserController {
 
     }
     @PostMapping("/request-otp")
-    public int requestOtp(@RequestBody String email) {
+    public String requestOtp(@RequestBody String email) {
 
     }
 

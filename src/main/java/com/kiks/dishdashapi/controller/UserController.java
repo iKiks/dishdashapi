@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/auth")
 public class UserController {
@@ -82,22 +84,19 @@ public class UserController {
 
     @PostMapping("/verify-otp")
     public ResponseEntity<?> verifyOtp(@RequestBody OtpVerifyRequest req) {
-        String email = req.email();
-        String otp = req.otp();
 
-        if (email == null || email.isBlank() || otp == null || otp.isBlank()) {
-            return ResponseEntity.badRequest().body("Email and OTP are required");
+        String key = "otp:email:" + req.email().toLowerCase();
+        String resetToken =
+                otpService.verifyOtpAndIssueResetToken(key, req.otp());
+
+        if (resetToken == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("Invalid or expired OTP");
         }
 
-        String key = "otp:email:" + email.toLowerCase();
-        boolean valid = otpService.verifyOtp(key, otp);
-
-        if (!valid) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid or expired OTP");
-        }
-
-        return ResponseEntity.ok("OTP verified");
+        return ResponseEntity.ok(Map.of("resetToken", resetToken));
     }
+
 
 
 

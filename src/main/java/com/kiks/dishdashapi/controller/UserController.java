@@ -2,6 +2,7 @@ package com.kiks.dishdashapi.controller;
 
 import com.kiks.dishdashapi.model.User;
 import com.kiks.dishdashapi.service.JwtService;
+import com.kiks.dishdashapi.service.OtpService;
 import com.kiks.dishdashapi.service.UserService;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -17,12 +18,15 @@ public class UserController {
 
     private final JwtService jwtService;
 
+    private final OtpService otpService;
+
     final
     AuthenticationManager authenticationManager;
 
-    public UserController(UserService service, JwtService jwtService, AuthenticationManager authenticationManager) {
+    public UserController(UserService service, JwtService jwtService, OtpService otpService, AuthenticationManager authenticationManager) {
         this.service = service;
         this.jwtService = jwtService;
+        this.otpService = otpService;
         this.authenticationManager = authenticationManager;
     }
 
@@ -46,6 +50,9 @@ public class UserController {
     @PostMapping("/request-otp")
     public String requestOtp(@RequestBody String email) {
 
+        user
+
+        return"";
     }
 
 }

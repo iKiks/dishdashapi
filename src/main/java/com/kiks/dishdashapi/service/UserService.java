@@ -21,5 +21,10 @@ public class UserService {
         return repo.save(user);
     }
 
+    public boolean verifyByEmail(String email) {
+        return repo.findByEmail(email)==null;
+
+    }
+
 
 }

@@ -3,6 +3,7 @@ package com.kiks.dishdashapi.service;
 import com.kiks.dishdashapi.model.User;
 import com.kiks.dishdashapi.model.UserPrincipal;
 import com.kiks.dishdashapi.repo.UserRepository;
+import org.jspecify.annotations.NullUnmarked;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -14,11 +15,15 @@ import java.util.Optional;
 @Service
 public class MyUserDetailsService implements UserDetailsService {
 
-    @Autowired
-    private UserRepository repo;
+    private final UserRepository repo;
+
+    public MyUserDetailsService(UserRepository repo) {
+        this.repo = repo;
+    }
 
 
     @Override
+    @NullUnmarked
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
        User user = repo.findByEmail(email);
 

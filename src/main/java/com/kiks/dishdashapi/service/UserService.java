@@ -2,7 +2,7 @@ package com.kiks.dishdashapi.service;
 
 import com.kiks.dishdashapi.model.User;
 import com.kiks.dishdashapi.repo.UserRepository;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password4j.Argon2Password4jPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -10,7 +10,7 @@ public class UserService {
 
     private final UserRepository repo;
 
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
+    private final Argon2Password4jPasswordEncoder encoder = new Argon2Password4jPasswordEncoder();
 
     public UserService(UserRepository repo) {
         this.repo = repo;

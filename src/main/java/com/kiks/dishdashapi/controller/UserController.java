@@ -4,6 +4,7 @@ import com.kiks.dishdashapi.model.User;
 import com.kiks.dishdashapi.service.JwtService;
 import com.kiks.dishdashapi.service.OtpService;
 import com.kiks.dishdashapi.service.UserService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -13,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class UserController {
+    public record OtpRequest(String email) {}
+
 
     private final UserService service;
 
@@ -47,14 +50,52 @@ public class UserController {
             return "Login Failed";
 
     }
-    @PostMapping("/request-otp")
-    public String requestOtp(@RequestBody String email) {
-        if(service.existByEmail(email)) {
 
-        } else {
-            return "Otp Service Failed";
+    @PostMapping("/request-otp")
+    public ResponseEntity<?> requestOtp(@RequestBody OtpRequest req) {
+        String email = req.email();
+
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body("Email is required");
         }
-        return"";
+
+        if (!service.existByEmail(email)) {
+            // Security best practice: don't reveal if email exists.
+            // But if you want to reveal, swap this to 404.
+            return ResponseEntity.ok("If the email exists, an OTP has been sent.");
+        }
+
+        String key = "otp:email:" + email.toLowerCase();
+        String otp = otpService.generateAndStoreOtp(key);
+
+        // TODO: send email here (MailService)
+        // mailService.sendOtp(email, otp);
+        System.out.println("otp: " + otp);
+
+        return ResponseEntity.ok("OTP sent");
     }
+
+    public record OtpVerifyRequest(String email, String otp) {}
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verifyOtp(@RequestBody OtpVerifyRequest req) {
+        String email = req.email();
+        String otp = req.otp();
+
+        if (email == null || email.isBlank() || otp == null || otp.isBlank()) {
+            return ResponseEntity.badRequest().body("Email and OTP are required");
+        }
+
+        String key = "otp:email:" + email.toLowerCase();
+        boolean valid = otpService.verifyOtp(key, otp);
+
+        if (!valid) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid or expired OTP");
+        }
+
+        return ResponseEntity.ok("OTP verified");
+    }
+
+
 
 }

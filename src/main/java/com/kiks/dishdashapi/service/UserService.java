@@ -21,9 +21,8 @@ public class UserService {
         return repo.save(user);
     }
 
-    public boolean verifyByEmail(String email) {
-        return repo.findByEmail(email)==null;
-
+    public boolean existByEmail(String email) {
+        return repo.existsByEmail(email);
     }
 
 

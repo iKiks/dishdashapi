@@ -49,9 +49,11 @@ public class UserController {
     }
     @PostMapping("/request-otp")
     public String requestOtp(@RequestBody String email) {
-
-        user
-
+        if(service.existByEmail(email)) {
+            otpService.get
+        } else {
+            return "Otp Service Failed";
+        }
         return"";
     }
 
